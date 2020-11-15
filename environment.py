@@ -4,19 +4,20 @@ from gym import spaces
 import numpy as np
 
 treechop_env = gym.make("MineRLTreechop-v0")
-actions_arr = np.repeat(treechop_env.action_space.noop(), 6)
-# forward
-actions_arr[0]["forward"] = 1
-# left
-actions_arr[1]["camera"] = [0, -1]
-# right
-actions_arr[2]["camera"] = [0, 1]
-# up
-actions_arr[3]["camera"] = [-1, 0]
-# down
-actions_arr[4]["camera"] = [1, 0]
-# attack
-actions_arr[5]["attack"] = 1
+
+values = np.linspace(-180,180, 16)
+actions_arr = np.repeat(treechop_env.action_space.noop(), 35)
+
+for i in range(16):
+    actions_arr[i]["camera"] = [0,values[i]]
+
+for i in range(16,32):
+    actions_arr[i]["camera"] = [0, values[i-16]]
+
+actions_arr[32]["forward"] = 1
+actions_arr[33]["forward"] = 1
+actions_arr[33]["jump"] = 1
+actions_arr[34]["attack"] = 1
 
 class MyEnv(gym.Env):
     """Custom Neurocar Environment that follows gym interface"""

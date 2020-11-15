@@ -11,6 +11,8 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 env = MyEnv()
 # if gpu is to be used
@@ -37,6 +39,16 @@ memory = ReplayMemory(10000)
 
 steps_done = 0
 
+def converter(observation):
+    region_size = 8
+    obs = observation['pov']
+    obs = obs / 25
+    H,W,C = obs.shape
+    state = torch.from_numpy(obs).float().to(device)
+    if len(state.shape) < 4:
+            state = torch.unsqueeze(state, 0)
+    state = state.reshape((-1,C,H,W))
+    return state
 
 def select_action(state):
     global steps_done
@@ -57,24 +69,6 @@ def select_action(state):
 episode_durations = []
 
 
-def plot_durations():
-    plt.figure(2)
-    plt.clf()
-    durations_t = torch.tensor(episode_durations, dtype=torch.float)
-    plt.title('Training...')
-    plt.xlabel('Episode')
-    plt.ylabel('Duration')
-    plt.plot(durations_t.numpy())
-    # Take 100 episode averages and plot them too
-    if len(durations_t) >= 100:
-        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
-        means = torch.cat((torch.zeros(99), means))
-        plt.plot(means.numpy())
-
-    plt.pause(0.001)  # pause a bit so that plots are updated
-    if is_ipython:
-        display.clear_output(wait=True)
-        display.display(plt.gcf())
 
 def optimize_model():
     if len(memory) < BATCH_SIZE:
@@ -123,13 +117,14 @@ def optimize_model():
 num_episodes = 50
 for i_episode in range(num_episodes):
     # Initialize the environment and state
-    state = env.reset()
+    state = converter(env.reset())
+    avg_rew = 0;
     for t in count():
         # Select and perform an action
         action = select_action(state)
         obs, rew, _, _ = env.step(action.item())
         reward = torch.tensor([rew], device=device)
-        next_state = obs
+        next_state = converter(obs)
 
         # Store the transition in memory
         memory.push(state, action, next_state, reward)
@@ -139,15 +134,13 @@ for i_episode in range(num_episodes):
 
         # Perform one step of the optimization (on the target network)
         optimize_model()
-        if t == 999:
-            episode_durations.append(t + 1)
-            plot_durations()
-            break
+        logging.debug(f"current reward = {rew}")
+        avg_rew += rew
+    avg_rew /= t
+    logging.info(f"avg reward = {avg_rew}")
     # Update the target network, copying all weights and biases in DQN
     if i_episode % TARGET_UPDATE == 0:
         target_net.load_state_dict(policy_net.state_dict())
 
 print('Complete')
 env.close()
-plt.ioff()
-plt.show()
