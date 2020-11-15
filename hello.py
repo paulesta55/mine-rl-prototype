@@ -8,9 +8,6 @@ done = False
 
 while not done:
     act = env.action_space.noop()
-    act["back"] = 0
-    act["forward"] = 1
-    act["jump"] = 1
+    act["camera"] = [1,0]
     act["attack"] = 1
     obs, rew, done, _ = env.step(act)
-    # env.render()
