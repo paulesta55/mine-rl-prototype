@@ -12,12 +12,14 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 import logging
+import minerl
+
 logging.basicConfig(level=logging.DEBUG)
 
 env = MyEnv()
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+data = minerl.data.make(env.env_name)
 BATCH_SIZE = 128
 GAMMA = 0.999
 EPS_START = 0.9
@@ -69,6 +71,26 @@ def select_action(state):
 episode_durations = []
 
 
+def pretraining_step():
+    transitions = memory.sample(BATCH_SIZE)
+    batch = Transition(*zip(*transitions))
+
+    # Compute a mask of non-final states and concatenate the batch elements
+    # (a final state would've been the one after which simulation ended)
+    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
+                                            batch.next_state)), device=device, dtype=torch.bool)
+    non_final_next_states = torch.cat([s for s in batch.next_state
+                                       if s is not None])
+    state_batch = torch.cat(batch.state)
+    action_batch = torch.cat(batch.action)
+    reward_batch = torch.cat(batch.reward)
+
+    optimizer.zero_grad()
+    pred_action = policy_net(state_batch)
+    loss = F.cross_entropy(pred_action, action_batch)
+    loss.backward()
+    optimizer.step()
+
 
 def optimize_model():
     if len(memory) < BATCH_SIZE:
@@ -113,6 +135,23 @@ def optimize_model():
     for param in policy_net.parameters():
         param.grad.data.clamp_(-1, 1)
     optimizer.step()
+
+traj_names = data.get_trajectory_names()
+np.random.shuffle(traj_names)
+for n in traj_names[:50]:
+    for state, action, reward, next_state, done in data.load_data(n, skip_interval=4):
+        memory.push(state, action, next_state, reward)
+
+num_pretraining = 10000
+
+for i in range(num_pretraining):
+    pretraining_step()
+
+def weights_init(m):
+    if isinstance(m, nn.Linear):
+        torch.nn.init.xavier_uniform(m.weight.data)
+
+policy_net.apply(weights_init)
 
 num_episodes = 50
 for i_episode in range(num_episodes):
