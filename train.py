@@ -141,7 +141,28 @@ traj_names = data.get_trajectory_names()
 np.random.shuffle(traj_names)
 for n in traj_names[:50]:
     for state, action, reward, next_state, done in data.load_data(n, skip_interval=4):
-        memory.push(state, action, next_state, reward)
+        if action["camera"][1] > 0 and abs(action["camera"][1]) > 1:
+            action_idx = 2
+        elif action["camera"][1] < 0 and abs(action["camera"][1]) > 1:
+            action_idx = 1
+        elif action["camera"][0] > 0 and abs(action["camera"][0]) > 1:
+            action_idx = 4
+        elif action["camera"][0] < 0 and abs(action["camera"][0]) > 1:
+            action_idx = 3
+        elif action["forward"] == 1 and action["jump"] == 1:
+            action_idx = 0
+        elif action["forward"] == 1:
+            action_idx = 5
+        elif action["left"] == 1:
+            action_idx = 6
+        elif action["right"] == 1:
+            action_idx = 7
+        elif action["back"] == 1:
+            action_idx = 9
+        elif action["jump"] == 1:
+            action_idx = 8
+
+        memory.push(state, action_idx, next_state, reward)
 
 num_pretraining = 10000
 

@@ -36,17 +36,16 @@ class MyEnv(gym.Env):
             # down
             a["camera"] = [5, 0]
         elif a_idx == 5:
-            # attack
-            a["attack"] = 1
-        elif a_idx == 6:
             # forward
             a["forward"] = 1
-        elif a_idx == 7:
+        elif a_idx == 6:
             a["left"] = 1
-        elif a_idx == 8:
+        elif a_idx == 7:
             a["right"] = 1
-        elif a_idx == 9:
+        elif a_idx == 8:
             a["jump"] = 1
+        elif a_idx == 9:
+            a["back"] = 1
         return treechop_env.step(a)
 
     def reset(self):
