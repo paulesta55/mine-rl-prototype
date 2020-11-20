@@ -88,6 +88,7 @@ def pretraining_step():
     optimizer.zero_grad()
     pred_action = policy_net(state_batch)
     loss = F.cross_entropy(pred_action, action_batch)
+    logging.debug(f"loss = {loss}")
     loss.backward()
     optimizer.step()
 
