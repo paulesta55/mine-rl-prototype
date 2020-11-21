@@ -261,7 +261,7 @@ if __name__ == '__main__':
         for t in count():
             # Select and perform an action
             action = select_action(state)
-            obs, rew, _, _ = env.step(action.item())
+            obs, rew, done, _ = env.step(action.item())
             reward = torch.tensor([rew], device=device)
             next_state = converter(obs)
 
@@ -275,6 +275,8 @@ if __name__ == '__main__':
             optimize_model()
             logging.debug(f"current reward = {rew}")
             avg_rew += rew
+            if done:
+                break
         avg_rew /= t
         logging.info(f"avg reward = {avg_rew}")
         # Update the target network, copying all weights and biases in DQN
