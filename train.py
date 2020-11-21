@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-data = minerl.data.make(env.env_name)
+data = minerl.data.make("MineRLTreechop-v0")
 BATCH_SIZE = 128
 GAMMA = 0.999
 EPS_START = 0.9
@@ -26,7 +26,7 @@ EPS_END = 0.05
 EPS_DECAY = 200
 TARGET_UPDATE = 10
 
-n_actions = env.action_space.n
+n_actions = 10
 img_height = 64
 img_width = 64
 
