@@ -44,10 +44,10 @@ def select_action(state):
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
             action_idx = policy_net(state).max(1)[1].view(1, 1).squeeze(1)
-            logging.debug(f"action idx shape from select action: {action_idx.shape}")
+            # logging.debug(f"action idx shape from select action: {action_idx.shape}")
             return action_idx
     else:
-        return torch.tensor([[random.randrange(n_actions)]], device=device, dtype=torch.long)
+        return torch.tensor([random.randrange(n_actions)], device=device, dtype=torch.long)
 
 
 episode_durations = []
@@ -91,7 +91,7 @@ def optimize_model():
                                           batch.next_state)), device=device, dtype=torch.bool)
     non_final_next_states = torch.cat([s for s in batch.next_state
                                                 if s is not None])
-    logging.debug(f"batch action: {batch.action}")
+    # logging.debug(f"batch action: {batch.action}")
     state_batch = torch.cat(batch.state)
     action_batch = torch.cat(batch.action)
     reward_batch = torch.cat(batch.reward)
