@@ -12,33 +12,14 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 import logging
 import minerl
+import argparse
 
 logging.basicConfig(level=logging.DEBUG)
 
-
+parser = argparse.ArgumentParser(description='Minerl DQfD')
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-data = minerl.data.make("MineRLTreechop-v0")
-BATCH_SIZE = 128
-GAMMA = 0.999
-EPS_START = 0.9
-EPS_END = 0.05
-EPS_DECAY = 200
-TARGET_UPDATE = 10
 
-n_actions = 10
-img_height = 64
-img_width = 64
-
-policy_net = DQN(img_height, img_width, n_actions).to(device)
-target_net = DQN(img_height, img_width, n_actions).to(device)
-target_net.load_state_dict(policy_net.state_dict())
-target_net.eval()
-optimizer = optim.RMSprop(policy_net.parameters())
-memory = ReplayMemory(10000)
-
-
-steps_done = 0
 
 def converter(observation):
     region_size = 8
@@ -137,95 +118,165 @@ def optimize_model():
         param.grad.data.clamp_(-1, 1)
     optimizer.step()
 
-traj_names = data.get_trajectory_names()
-np.random.shuffle(traj_names)
-for n in traj_names[:50]:
-    for state, action, reward, next_state, done in data.load_data(n, skip_interval=4):
-        camera_threshold = (abs(action['camera'][0]) + abs(action['camera'][1])) / 2.0
-        if camera_threshold > 2.5:
-            # pitch +5
-            if ((action['camera'][0] > 0) & (
-                    abs(action['camera'][0]) > abs(action['camera'][1]))):
-                action_idx = 0
-            # pitch -5
-            elif ((action['camera'][0] < 0) & (
-                    abs(action['camera'][0]) > abs(action['camera'][1]))):
-                action_idx = 1
-            # yaw +5
-            elif ((action['camera'][1] > 0) & (
-                    abs(action['camera'][0]) < abs(action['camera'][1]))):
-                action_idx = 2
-            # yax -5
-            elif ((action['camera'][1] < 0) & (
-                    abs(action['camera'][0]) < abs(action['camera'][1]))):
-                action_idx = 3
-        # forward
-        elif action["forward"] == 1:
-            action_idx = 4
-            # forward and jump
-            if action["jump"] == 1:
-                action_idx = 5
-        # left
-        elif action["left"] == 1:
-            action_idx = 6
-        # right
-        elif action["right"] == 1:
-            action_idx = 7
-        # back
-        elif action["back"] == 1:
-            action_idx = 8
-        # jump
-        else:
-            action_idx = 9
-        memory.push(converter(state), torch.tensor([action_idx], device=device), converter(next_state),
-                    torch.tensor([reward], device=device))
+def loadExpertData(data, memory):
+    traj_names = data.get_trajectory_names()
+    np.random.shuffle(traj_names)
+    for n in traj_names[:50]:
+        for state, action, reward, next_state, done in data.load_data(n, skip_interval=4):
+            camera_threshold = (abs(action['camera'][0]) + abs(action['camera'][1])) / 2.0
+            if camera_threshold > 2.5:
+                # pitch +5
+                if ((action['camera'][0] > 0) & (
+                        abs(action['camera'][0]) > abs(action['camera'][1]))):
+                    action_idx = 0
+                # pitch -5
+                elif ((action['camera'][0] < 0) & (
+                        abs(action['camera'][0]) > abs(action['camera'][1]))):
+                    action_idx = 1
+                # yaw +5
+                elif ((action['camera'][1] > 0) & (
+                        abs(action['camera'][0]) < abs(action['camera'][1]))):
+                    action_idx = 2
+                # yax -5
+                elif ((action['camera'][1] < 0) & (
+                        abs(action['camera'][0]) < abs(action['camera'][1]))):
+                    action_idx = 3
+            # forward
+            elif action["forward"] == 1:
+                action_idx = 4
+                # forward and jump
+                if action["jump"] == 1:
+                    action_idx = 5
+            # left
+            elif action["left"] == 1:
+                action_idx = 6
+            # right
+            elif action["right"] == 1:
+                action_idx = 7
+            # back
+            elif action["back"] == 1:
+                action_idx = 8
+            # jump
+            else:
+                action_idx = 9
+            memory.push(converter(state), torch.tensor([action_idx], device=device), converter(next_state),
+                        torch.tensor([reward], device=device))
 
-num_pretraining = 10000
 
-loss_history = []
-for i in range(num_pretraining):
-    loss_history.append(pretraining_step())
-
-np.save('loss_history',np.array(loss_history))
 
 def weights_init(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_uniform(m.weight.data)
 
-policy_net.apply(weights_init)
-target_net.load_state_dict(policy_net.state_dict())
 
-from environment import MyEnv
 
-env = MyEnv()
+# nn optimization hyperparams
+parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
+                    help='learning rate (default: 0.001)')
+parser.add_argument('--bsz', type=int, default=128, metavar='BSZ',
+                    help='batch size (default: 128)')
 
-num_episodes = 50
-for i_episode in range(num_episodes):
-    # Initialize the environment and state
-    state = converter(env.reset())
-    avg_rew = 0;
-    for t in count():
-        # Select and perform an action
-        action = select_action(state)
-        obs, rew, _, _ = env.step(action.item())
-        reward = torch.tensor([rew], device=device)
-        next_state = converter(obs)
+# model saving and loading settings
+parser.add_argument('--save-name', default='minerl_dqn_model', metavar='FN',
+                    help='path/prefix for the filename to save model\'s parameters')
+parser.add_argument('--load-name', default=None, metavar='LN',
+                    help='path/prefix for the filename to load model\'s parameters')
 
-        # Store the transition in memory
-        memory.push(state, action, next_state, reward)
+# RL training hyperparams
+parser.add_argument('--env-name', default='MineRLTreechop-v0', metavar='ENV',
+                    help='environment to train on (default: MineRLTreechop-v0')
+parser.add_argument('--num-eps', type=int, default=-1, metavar='NE',
+                    help='number of episodes to train (default: train forever)')
+parser.add_argument('--frame-skip', type=int, default=4, metavar='FS',
+                    help='number of frames to skip between agent input (must match frame skip for demos)')
+parser.add_argument('--init-states', type=int, default=10000, metavar='IS',
+                    help='number of states to store in memory before training (default: 1000)')
+parser.add_argument('--gamma', type=float, default=0.999, metavar='GAM',
+                    help='reward discount per step (default: 0.99)')
 
-        # Move to the next state
-        state = next_state
+# policy hyperparams
+parser.add_argument('--eps-start', type=int, default=0.9, metavar='EST',
+                    help='starting value for epsilon')
+parser.add_argument('--eps-end', type=int, default=0.05, metavar='EEND',
+                    help='ending value for epsilon')
+parser.add_argument('--eps-decay', type=int, default=200, metavar='ES')
 
-        # Perform one step of the optimization (on the target network)
-        optimize_model()
-        logging.debug(f"current reward = {rew}")
-        avg_rew += rew
-    avg_rew /= t
-    logging.info(f"avg reward = {avg_rew}")
-    # Update the target network, copying all weights and biases in DQN
-    if i_episode % TARGET_UPDATE == 0:
-        target_net.load_state_dict(policy_net.state_dict())
+# testing/monitoring settings
+parser.add_argument('--no-train', action="store_true", default=False,
+                    help='set to true if you don\'t want to actually train')
+parser.add_argument('--monitor', action="store_true",
+                    help='whether to monitor results')
+parser.add_argument('--upload', action="store_true",
+                    help='set this (and --monitor) if you want to upload monitored ' \
+                         'results to gym (requires api key in an api_key.json)')
 
-print('Complete')
-env.close()
+if __name__ == '__main__':
+    args = parser.parse_args()
+    data = minerl.data.make(args.env_name)
+    BATCH_SIZE = args.bsz
+    GAMMA = args.gamma
+    EPS_START = args.eps_start
+    EPS_END = args.eps_end
+    EPS_DECAY = args.eps_decay
+    TARGET_UPDATE = 10
+
+    n_actions = 10
+    img_height = 64
+    img_width = 64
+
+    policy_net = DQN(img_height, img_width, n_actions).to(device)
+    target_net = DQN(img_height, img_width, n_actions).to(device)
+    target_net.load_state_dict(policy_net.state_dict())
+    target_net.eval()
+    optimizer = optim.RMSprop(policy_net.parameters())
+    memory = ReplayMemory(10000)
+
+    steps_done = 0
+    num_pretraining = 10000
+
+    loss_history = []
+    if not args.no_train:
+        loadExpertData(data, memory)
+        for i in range(num_pretraining):
+            loss_history.append(pretraining_step())
+        torch.save(policy_net.state_dict(), 'pretrain-model')
+        np.save('loss_history', np.array(loss_history))
+    else:
+        policy_net.load_state_dict(torch.load("pretrain-model.pt"))
+    policy_net.apply(weights_init)
+    target_net.load_state_dict(policy_net.state_dict())
+
+    from environment import MyEnv
+
+    env = MyEnv()
+
+    num_episodes = 50
+    for i_episode in range(num_episodes):
+        # Initialize the environment and state
+        state = converter(env.reset())
+        avg_rew = 0;
+        for t in count():
+            # Select and perform an action
+            action = select_action(state)
+            obs, rew, _, _ = env.step(action.item())
+            reward = torch.tensor([rew], device=device)
+            next_state = converter(obs)
+
+            # Store the transition in memory
+            memory.push(state, action, next_state, reward)
+
+            # Move to the next state
+            state = next_state
+
+            # Perform one step of the optimization (on the target network)
+            optimize_model()
+            logging.debug(f"current reward = {rew}")
+            avg_rew += rew
+        avg_rew /= t
+        logging.info(f"avg reward = {avg_rew}")
+        # Update the target network, copying all weights and biases in DQN
+        if i_episode % TARGET_UPDATE == 0:
+            target_net.load_state_dict(policy_net.state_dict())
+
+    print('Complete')
+    env.close()
