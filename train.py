@@ -275,6 +275,9 @@ if __name__ == '__main__':
             optimize_model()
             logging.debug(f"current reward = {rew}")
             avg_rew += rew
+            # early episode stopping
+            if t>10000:
+                break
             if done:
                 break
         avg_rew /= t
