@@ -24,7 +24,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def converter(observation):
     region_size = 8
     obs = observation['pov']
-    obs = obs / 25
+    obs = obs / 255
     H,W,C = obs.shape
     state = torch.from_numpy(obs).float().to(device)
     if len(state.shape) < 4:
@@ -43,7 +43,9 @@ def select_action(state):
             # t.max(1) will return largest column value of each row.
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
-            return policy_net(state).max(1)[1].view(1, 1).squeeze(1)
+            action_idx = policy_net(state).max(1)[1].view(1, 1).squeeze(1)
+            logging.debug(f"action idx shape from select action: {action_idx.shape}")
+            return action_idx
     else:
         return torch.tensor([[random.randrange(n_actions)]], device=device, dtype=torch.long)
 
