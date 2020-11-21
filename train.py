@@ -177,7 +177,8 @@ for n in traj_names[:50]:
         # jump
         else:
             action_idx = 9
-        memory.push(state, action_idx, next_state, reward)
+        memory.push(converter(state), torch.tensor([action_idx], device=device), converter(next_state),
+                    torch.tensor([reward], device=device))
 
 num_pretraining = 10000
 
