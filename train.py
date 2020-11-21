@@ -242,7 +242,7 @@ if __name__ == '__main__':
         torch.save(policy_net.state_dict(), 'pretrain-model')
         np.save('loss_history', np.array(loss_history))
     else:
-        policy_net.load_state_dict(torch.load("pretrain-model.pt"))
+        policy_net.load_state_dict(torch.load("pretrain-model"))
     policy_net.apply(weights_init)
     target_net.load_state_dict(policy_net.state_dict())
 
