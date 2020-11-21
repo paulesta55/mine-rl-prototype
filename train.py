@@ -1,5 +1,4 @@
 from network import ReplayMemory, DQN, Transition
-from environment import MyEnv
 import math
 import random
 import numpy as np
@@ -16,7 +15,7 @@ import minerl
 
 logging.basicConfig(level=logging.DEBUG)
 
-env = MyEnv()
+
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 data = minerl.data.make(env.env_name)
@@ -91,6 +90,7 @@ def pretraining_step():
     logging.debug(f"loss = {loss}")
     loss.backward()
     optimizer.step()
+    return loss.item()
 
 
 def optimize_model():
@@ -141,39 +141,61 @@ traj_names = data.get_trajectory_names()
 np.random.shuffle(traj_names)
 for n in traj_names[:50]:
     for state, action, reward, next_state, done in data.load_data(n, skip_interval=4):
-        if action["camera"][1] > 0 and abs(action["camera"][1]) > 1:
-            action_idx = 2
-        elif action["camera"][1] < 0 and abs(action["camera"][1]) > 1:
-            action_idx = 1
-        elif action["camera"][0] > 0 and abs(action["camera"][0]) > 1:
-            action_idx = 4
-        elif action["camera"][0] < 0 and abs(action["camera"][0]) > 1:
-            action_idx = 3
-        elif action["forward"] == 1 and action["jump"] == 1:
-            action_idx = 0
+        camera_threshold = (abs(action['camera'][0]) + abs(action['camera'][1])) / 2.0
+        if camera_threshold > 2.5:
+            # pitch +5
+            if ((action['camera'][0] > 0) & (
+                    abs(action['camera'][0]) > abs(action['camera'][1]))):
+                action_idx = 0
+            # pitch -5
+            elif ((action['camera'][0] < 0) & (
+                    abs(action['camera'][0]) > abs(action['camera'][1]))):
+                action_idx = 1
+            # yaw +5
+            elif ((action['camera'][1] > 0) & (
+                    abs(action['camera'][0]) < abs(action['camera'][1]))):
+                action_idx = 2
+            # yax -5
+            elif ((action['camera'][1] < 0) & (
+                    abs(action['camera'][0]) < abs(action['camera'][1]))):
+                action_idx = 3
+        # forward
         elif action["forward"] == 1:
-            action_idx = 5
+            action_idx = 4
+            # forward and jump
+            if action["jump"] == 1:
+                action_idx = 5
+        # left
         elif action["left"] == 1:
             action_idx = 6
+        # right
         elif action["right"] == 1:
             action_idx = 7
+        # back
         elif action["back"] == 1:
-            action_idx = 9
-        elif action["jump"] == 1:
             action_idx = 8
-
+        # jump
+        else:
+            action_idx = 9
         memory.push(state, action_idx, next_state, reward)
 
 num_pretraining = 10000
 
+loss_history = []
 for i in range(num_pretraining):
-    pretraining_step()
+    loss_history.append(pretraining_step())
+
+np.save('loss_history',np.array(loss_history))
 
 def weights_init(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_uniform(m.weight.data)
 
 policy_net.apply(weights_init)
+
+from environment import MyEnv
+
+env = MyEnv()
 
 num_episodes = 50
 for i_episode in range(num_episodes):
