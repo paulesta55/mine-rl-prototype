@@ -124,7 +124,7 @@ def optimize_model():
 def loadExpertData(data, memory):
     traj_names = data.get_trajectory_names()
     np.random.shuffle(traj_names)
-    for n in traj_names[:50]:
+    for n in traj_names[:60]:
         for state, action, reward, next_state, done in data.load_data(n, skip_interval=4):
             camera_threshold = (abs(action['camera'][0]) + abs(action['camera'][1])) / 2.0
             if camera_threshold > 2.5:
